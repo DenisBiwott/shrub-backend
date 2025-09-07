@@ -29,7 +29,7 @@ export class ShrubsController {
     return this.shrubsService.findAll();
   }
 
-  @Get('top')
+  @Get('leaderboard')
   async getTopShrubs(@Query('limit') limit?: number): Promise<Shrub[]> {
     return this.shrubsService.getTopShrubs(
       limit ? parseInt(limit.toString()) : 10,

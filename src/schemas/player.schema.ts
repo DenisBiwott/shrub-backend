@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, SchemaTypes, Types } from 'mongoose';
 
 export type PlayerDocument = Player & Document;
 
@@ -8,7 +8,7 @@ export class Player {
   @Prop({ required: true, unique: true })
   name: string;
 
-  @Prop({ type: [Types.ObjectId], ref: 'Shrub', default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'Shrub', default: [] })
   shrubs: Types.ObjectId[];
 
   @Prop()

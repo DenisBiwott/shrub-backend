@@ -1,14 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, SchemaTypes, Types } from 'mongoose';
 
 export type ShrubDocument = Shrub & Document;
 
 @Schema({ timestamps: true })
 export class Shrub {
-  @Prop({ required: true, type: Types.ObjectId, ref: 'Player' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Player', required: true })
   shrubber: Types.ObjectId;
 
-  @Prop({ required: true, type: Types.ObjectId, ref: 'Player' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Player', required: true })
   createdBy: Types.ObjectId;
 
   @Prop({ required: true })
@@ -20,7 +20,7 @@ export class Shrub {
   @Prop()
   description?: string;
 
-  @Prop({ type: [Types.ObjectId], ref: 'Vote', default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'Vote', default: [] })
   votes: Types.ObjectId[];
 
   @Prop({ default: Date.now })
@@ -31,3 +31,4 @@ export class Shrub {
 }
 
 export const ShrubSchema = SchemaFactory.createForClass(Shrub);
+ShrubSchema.index({ shrubber: 1 });

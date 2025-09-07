@@ -46,7 +46,65 @@ export class PlayersService {
     return player;
   }
 
+  async addShrubToPlayer(shrubber: string, shrub: string) {
+    await this.playerModel
+      .findByIdAndUpdate(
+        shrubber,
+        { $addToSet: { shrubs: shrub } },
+        {
+          new: true,
+        },
+      )
+      .exec();
+  }
+
   async getLeaderboard(): Promise<Player[]> {
-    return this.playerModel.find().sort({ totalPoints: -1 }).limit(100).exec();
+    return this.playerModel.aggregate([
+      // Lookup shrubs for each player
+      {
+        $lookup: {
+          from: 'shrubs',
+          localField: '_id',
+          foreignField: 'shrubber',
+          as: 'shrubs',
+        },
+      },
+
+      // Lookup votes for those shrubs
+      {
+        $lookup: {
+          from: 'votes',
+          localField: 'shrubs._id',
+          foreignField: 'shrub',
+          as: 'votes',
+        },
+      },
+
+      // Compute totals
+      {
+        $addFields: {
+          shrubCount: { $size: '$shrubs' },
+          totalPoints: { $sum: '$votes.points' },
+          voterCount: { $size: { $setUnion: '$votes.voter' } }, // unique voters
+        },
+      },
+
+      // Sort by totalPoints descending
+      { $sort: { totalPoints: -1 } },
+
+      // Limit to top 100
+      { $limit: 100 },
+
+      // Return only what you want
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          shrubCount: 1,
+          totalPoints: 1,
+          voterCount: 1,
+        },
+      },
+    ]);
   }
 }

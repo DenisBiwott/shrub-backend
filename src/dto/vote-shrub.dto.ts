@@ -2,10 +2,10 @@ import { IsMongoId, IsNumber } from 'class-validator';
 
 export class VoteShrubDto {
   @IsMongoId()
-  shrubId: string;
+  shrub: string;
 
   @IsMongoId()
-  voterId: string;
+  voter: string;
 
   @IsNumber()
   points: number;
