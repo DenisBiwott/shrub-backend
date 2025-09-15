@@ -6,7 +6,7 @@ import {
   Param,
   ValidationPipe,
 } from '@nestjs/common';
-import { PlayersService } from './players.service';
+import { PlayerLeaderBoard, PlayersService } from './players.service';
 import { CreatePlayerDto } from '../dto/create-player.dto';
 import { Player } from '../schemas/player.schema';
 
@@ -27,7 +27,7 @@ export class PlayersController {
   }
 
   @Get('leaderboard')
-  async getLeaderboard(): Promise<Player[]> {
+  async getLeaderboard(): Promise<PlayerLeaderBoard[]> {
     return this.playersService.getLeaderboard();
   }
 

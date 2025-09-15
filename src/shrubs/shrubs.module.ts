@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ShrubsController } from './shrubs.controller';
 import { ShrubsService } from './shrubs.service';
@@ -10,9 +10,9 @@ import { PlayersModule } from '../players/players.module';
   imports: [
     MongooseModule.forFeature([
       { name: Shrub.name, schema: ShrubSchema },
-      { name: Vote.name, schema: VoteSchema }
+      { name: Vote.name, schema: VoteSchema },
     ]),
-    PlayersModule,
+    forwardRef(() => PlayersModule),
   ],
   controllers: [ShrubsController],
   providers: [ShrubsService],

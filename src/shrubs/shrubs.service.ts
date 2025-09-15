@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -16,6 +18,7 @@ export class ShrubsService {
   constructor(
     @InjectModel(Shrub.name) private shrubModel: Model<ShrubDocument>,
     @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
+    @Inject(forwardRef(() => PlayersService))
     private playersService: PlayersService,
   ) {}
 
@@ -36,13 +39,21 @@ export class ShrubsService {
     createdShrub.votes.push(savedVote._id as Types.ObjectId);
 
     // Add shrub to player's shrub list
-    this.playersService.addShrubToPlayer(
+    await this.playersService.addShrubToPlayer(
       createShrubDto.shrubber,
       createdShrub._id as string,
     );
 
     const savedShrub = await createdShrub.save();
     return savedShrub.populate('votes');
+  }
+
+  async fetchPlayersLatestShrub(playerId: string): Promise<Shrub | null> {
+    return this.shrubModel
+      .findOne({ shrubber: playerId })
+      .sort({ createdAt: -1 })
+      .populate('shrubber', 'name')
+      .exec();
   }
 
   async findAll(): Promise<Shrub[]> {
@@ -97,6 +108,7 @@ export class ShrubsService {
 
       return { success: true };
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (error.code === 11000) {
         throw new ConflictException('You have already voted for this shrub');
       }
@@ -119,6 +131,7 @@ export class ShrubsService {
   }
 
   async getTopShrubs(limit: number = 50): Promise<Shrub[]> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return await this.shrubModel
       .aggregate([
         // Lookup votes for each shrub
@@ -135,9 +148,10 @@ export class ShrubsService {
         {
           $addFields: {
             totalPoints: { $sum: '$votes.points' },
-            voterCount: { $size: { $setUnion: '$votes.voter' } }, // unique voters
+            voterCount: { $size: { $setUnion: '$votes.voter' } },
           },
         },
+
         // Lookup shrub owner (player)
         {
           $lookup: {
@@ -152,10 +166,20 @@ export class ShrubsService {
         // Sort by points
         { $sort: { totalPoints: -1 } },
 
-        // Limit (optional)
-        { $limit: 100 },
+        // Add rank using window function
+        {
+          $setWindowFields: {
+            sortBy: { totalPoints: -1 },
+            output: {
+              rank: { $rank: {} }, // or $denseRank if you don’t want gaps on ties
+            },
+          },
+        },
 
-        // Final projection
+        // Limit
+        { $limit: limit },
+
+        // Projection
         {
           $project: {
             _id: 1,
@@ -166,6 +190,7 @@ export class ShrubsService {
             totalPoints: 1,
             voterCount: 1,
             createdAt: 1,
+            rank: 1,
           },
         },
       ])

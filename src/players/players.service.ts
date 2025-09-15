@@ -2,16 +2,30 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Player, PlayerDocument } from '../schemas/player.schema';
 import { CreatePlayerDto } from '../dto/create-player.dto';
+import { ShrubsService } from 'src/shrubs/shrubs.service';
+export interface PlayerLeaderBoard {
+  _id: string;
+  rank: number;
+  name: string;
+  shrubCount: number;
+  totalPoints: number;
+  voterCount: number;
+  latestShrub: string;
+}
 
 @Injectable()
 export class PlayersService {
   constructor(
     @InjectModel(Player.name) private playerModel: Model<PlayerDocument>,
+    @Inject(forwardRef(() => ShrubsService))
+    private shrubsService: ShrubsService,
   ) {}
 
   async create(createPlayerDto: CreatePlayerDto): Promise<Player> {
@@ -19,6 +33,7 @@ export class PlayersService {
       const createdPlayer = new this.playerModel(createPlayerDto);
       return await createdPlayer.save();
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (error.code === 11000) {
         throw new ConflictException('Player name already exists');
       }
@@ -58,53 +73,74 @@ export class PlayersService {
       .exec();
   }
 
-  async getLeaderboard(): Promise<Player[]> {
-    return this.playerModel.aggregate([
-      // Lookup shrubs for each player
-      {
-        $lookup: {
-          from: 'shrubs',
-          localField: '_id',
-          foreignField: 'shrubber',
-          as: 'shrubs',
+  async getLeaderboard(): Promise<PlayerLeaderBoard[]> {
+    const playerLeaderBoard: PlayerLeaderBoard[] =
+      await this.playerModel.aggregate([
+        // Lookup shrubs for each player
+        {
+          $lookup: {
+            from: 'shrubs',
+            localField: '_id',
+            foreignField: 'shrubber',
+            as: 'shrubs',
+          },
         },
-      },
 
-      // Lookup votes for those shrubs
-      {
-        $lookup: {
-          from: 'votes',
-          localField: 'shrubs._id',
-          foreignField: 'shrub',
-          as: 'votes',
+        // Lookup votes for those shrubs
+        {
+          $lookup: {
+            from: 'votes',
+            localField: 'shrubs._id',
+            foreignField: 'shrub',
+            as: 'votes',
+          },
         },
-      },
 
-      // Compute totals
-      {
-        $addFields: {
-          shrubCount: { $size: '$shrubs' },
-          totalPoints: { $sum: '$votes.points' },
-          voterCount: { $size: { $setUnion: '$votes.voter' } }, // unique voters
+        // Compute totals
+        {
+          $addFields: {
+            shrubCount: { $size: '$shrubs' },
+            totalPoints: { $sum: '$votes.points' },
+            voterCount: { $size: { $setUnion: '$votes.voter' } }, // unique voters
+          },
         },
-      },
 
-      // Sort by totalPoints descending
-      { $sort: { totalPoints: -1 } },
-
-      // Limit to top 100
-      { $limit: 100 },
-
-      // Return only what you want
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          shrubCount: 1,
-          totalPoints: 1,
-          voterCount: 1,
+        // Add rank based on totalPoints
+        {
+          $setWindowFields: {
+            sortBy: { totalPoints: -1 },
+            output: {
+              rank: { $documentNumber: {} }, // 1, 2, 3...
+            },
+          },
         },
-      },
-    ]);
+
+        // Limit to top 100
+        { $limit: 100 },
+
+        // Return only what you want
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            shrubCount: 1,
+            totalPoints: 1,
+            voterCount: 1,
+            rank: 1,
+          },
+        },
+      ]);
+
+    for (const player of playerLeaderBoard) {
+      const playerLatestShrub =
+        await this.shrubsService.fetchPlayersLatestShrub(player._id);
+
+      if (playerLatestShrub) {
+        player.latestShrub = playerLatestShrub.shrub ?? null;
+      }
+    }
+
+    // Not really returning player but player leaderboard
+    return playerLeaderBoard;
   }
 }
